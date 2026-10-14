@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./data/**)",
+      "Read(./dist/**)",
+      "Read(./node_modules/**)",
+      "Bash(clasp push:*)",
+      "Bash(clasp deploy:*)",
+      "Bash(npx clasp push:*)",
+      "Bash(npx clasp deploy:*)",
+      "Bash(git push:*)",
+      "PowerShell(clasp push:*)",
+      "PowerShell(clasp deploy:*)",
+      "PowerShell(npx clasp push:*)",
+      "PowerShell(npx clasp deploy:*)",
+      "PowerShell(git push:*)"
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "live-so-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BRND.ME Live SO Tracker - Google Apps Script + Sheet DB",
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\"",
+    "preview": "node scripts/preview.js",
+    "shot": "node scripts/shot.js",
+    "inspect": "node scripts/inspect.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {}
+}
