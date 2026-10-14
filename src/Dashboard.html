@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Order Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&display=swap">
+  <?!= include('Styles') ?>
+</head>
+<body>
+<div class="band">
+  <header class="appbar">
+    <div class="container">
+      <div class="brand"><span class="mark" aria-hidden="true">B</span>BRND.ME</div>
+      <nav class="crumbs" aria-label="Breadcrumb"><span class="sep">/</span><span>Sales</span><span class="sep">/</span><span class="cur">Order Intelligence</span></nav>
+      <span class="spacer"></span>
+      <span class="asof none" id="asof"><span class="live" aria-hidden="true"></span><span class="lbl">Updated</span> <time id="asofTime" class="num">Loading…</time><span class="ago" id="asofAgo" hidden></span></span>
+    </div>
+  </header>
+
+  <div class="container hero">
+    <div>
+      <span class="eyebrow"><b id="monthLabel">This month</b> · Month to date · Offline</span>
+      <h1>Order Intelligence</h1>
+      <p>Order value by distributor and SO status. Amounts are total amount including GST. Cancelled orders are excluded. Click a party to see its sales orders.</p>
+    </div>
+    <div class="filterbar" role="search">
+      <label class="control asm" for="owner"><span class="pre">Owner</span><select id="owner"><option value="">All owners</option></select></label>
+      <label class="control search" for="q">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
+        <input id="q" type="search" placeholder="Search parties or SO numbers" aria-label="Search party, code, owner or SO number" autocomplete="off">
+      </label>
+      <button class="link-btn" id="clearAll" type="button" hidden>Clear filters</button>
+      <span class="grow"></span>
+      <div class="seg" role="group" aria-label="Columns" id="seg">
+        <span class="thumb" aria-hidden="true"></span>
+        <button type="button" id="modeStatus" aria-pressed="true">By status</button>
+        <button type="button" id="modeBucket" aria-pressed="false">By bucket</button>
+      </div>
+      <button class="btn" id="copyCsv" type="button">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="8.5" height="8.5" rx="1.5"/><path d="M3 10.5V3.5A1 1 0 0 1 4 2.5h6.5"/></svg>
+        Copy CSV
+      </button>
+    </div>
+  </div>
+</div>
+
+<main class="container">
+  <section class="card" aria-label="Summary">
+    <div class="kpis" id="kpis"></div>
+    <div class="composition">
+      <div class="comp-head"><h2>Status composition</h2><span class="num" id="compTotal"></span></div>
+      <div class="stack" id="compBar" role="img" aria-label="Status composition"></div>
+      <ul class="legend" id="compLegend"></ul>
+    </div>
+  </section>
+
+  <section class="card tcard" aria-labelledby="buyersTitle">
+    <div class="tcard-head">
+      <h2 id="buyersTitle">Parties</h2>
+      <span class="badge num" id="rowCount">…</span>
+      <span class="grow"></span>
+      <span id="flags" style="display:flex;gap:8px;flex-wrap:wrap"></span>
+    </div>
+    <div class="tbl-scroll">
+      <table id="pivot"><thead></thead><tbody></tbody><tfoot></tfoot></table>
+    </div>
+    <ul class="mlist" id="mlist"></ul>
+    <div class="mtotal num" id="mtotal"></div>
+  </section>
+
+  <div class="foot">
+    <span id="sourceNote">Source: SO SKU Listing (Metabase hourly alert).</span>
+    <span>Billed = Dispatched + Delivered · Open = Open + Packed</span>
+  </div>
+</main>
+
+<dialog class="drawer" id="drawer" aria-labelledby="drTitle">
+  <div class="dr-head">
+    <div class="dr-top">
+      <div class="grow">
+        <div class="dr-kicker">Sales orders</div>
+        <h2 class="dr-title" id="drTitle"></h2>
+        <div class="dr-meta num" id="drMeta"></div>
+      </div>
+      <div class="dr-total num"><b id="drTotal"></b><span id="drCount"></span></div>
+      <button class="icon-btn" id="drClose" type="button" aria-label="Close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div class="dr-filters" id="drFilters" role="group" aria-label="Filter by status"></div>
+  </div>
+  <div class="dr-body">
+    <table class="sotable" id="soTable"><thead></thead><tbody></tbody></table>
+  </div>
+  <div class="dr-foot num" id="drFoot"></div>
+</dialog>
+
+<?!= include('App') ?>
+</body>
+</html>
