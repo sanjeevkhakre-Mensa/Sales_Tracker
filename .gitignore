@@ -10,3 +10,4 @@ reports/
 *.xls
 *.csv
 !tests/fixtures/*.csv
+paste/
