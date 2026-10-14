@@ -6,26 +6,28 @@ function isoIst_(d) {
   return Utilities.formatDate(d, CONFIG.TZ, "yyyy-MM-dd'T'HH:mm:ssXXX");
 }
 
-/** Newest message (across matching threads) that carries the CSV and is not yet processed. */
+function dumpAttachment_(m) {
+  return m.getAttachments({ includeInlineImages: false }).filter(function (a) {
+    var n = a.getName().toLowerCase();
+    return n.indexOf(CONFIG.ATTACHMENT_NAME) > -1 && /\.csv$/.test(n);
+  })[0] || null;
+}
+
+/**
+ * The hourly alerts trail in one Gmail thread: collect every message of every matching
+ * thread, then take the NEWEST one carrying the CSV (Model.pickLatestDump).
+ */
 function findNewDump_(force) {
-  var done = force ? {} : Store.processedMessageIds(500);
-  var msgs = [];
+  var byId = {}, candidates = [];
   GmailApp.search(CONFIG.GMAIL_QUERY, 0, 10).forEach(function (t) {
-    t.getMessages().forEach(function (m) { msgs.push(m); });
+    t.getMessages().forEach(function (m) {
+      var att = dumpAttachment_(m);
+      byId[m.getId()] = { msg: m, att: att };
+      candidates.push({ id: m.getId(), time: m.getDate().getTime(), hasCsv: !!att });
+    });
   });
-  msgs.sort(function (a, b) { return b.getDate().getTime() - a.getDate().getTime(); });
-  for (var i = 0; i < msgs.length; i++) {
-    var m = msgs[i];
-    var att = m.getAttachments({ includeInlineImages: false }).filter(function (a) {
-      var n = a.getName().toLowerCase();
-      return n.indexOf(CONFIG.ATTACHMENT_NAME) > -1 && /\.csv$/.test(n);
-    })[0];
-    if (!att) continue;
-    // Only ever look at the newest dump: an older unprocessed one is already superseded.
-    if (done[m.getId()]) return null;
-    return { msg: m, att: att };
-  }
-  return null;
+  var id = Model.pickLatestDump(candidates, force ? {} : Store.processedMessageIds(500));
+  return id ? byId[id] : null;
 }
 
 /** Trigger entry point. */

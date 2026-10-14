@@ -172,6 +172,21 @@ function ModelFactory() {
     };
   }
 
+  /**
+   * Pick the dump to ingest from every message in the matching thread(s).
+   * The hourly alerts trail in ONE Gmail thread, so: newest message that carries the CSV wins.
+   * Returns its id, or null when that newest dump was already processed (older ones are superseded).
+   * @param {Array<{id:string, time:number, hasCsv:boolean}>} messages
+   * @param {Object<string,boolean>} processed  ids already ingested
+   */
+  function pickLatestDump(messages, processed) {
+    var withCsv = (messages || []).filter(function (m) { return m && m.hasCsv; });
+    if (!withCsv.length) return null;
+    withCsv.sort(function (a, b) { return b.time - a.time; });
+    var newest = withCsv[0];
+    return processed && processed[newest.id] ? null : newest.id;
+  }
+
   /** Minimal RFC 4180 CSV parser (quotes, escaped quotes, CRLF). Used by tests and local preview. */
   function parseCsv(text) {
     var rows = [], row = [], field = '', i = 0, q = false, s = String(text);
@@ -201,6 +216,7 @@ function ModelFactory() {
     titleCase: titleCase,
     indexCustomers: indexCustomers,
     buildSnapshot: buildSnapshot,
+    pickLatestDump: pickLatestDump,
     parseCsv: parseCsv
   };
 }
