@@ -16,10 +16,11 @@
 - [ ] Model.pivot(lines, rowKeys, colKey, valueKey) → {rows, cols, totals} + tests (reproduce user's buyer × so_status pivot)
 - [ ] Model.computeKpis (per bucket count/₹/% , Placed excludes INTERNAL) + tests
 - [ ] Model.diffSnapshots → EVENTS (idempotent) + tests
-- [ ] Model.resolveAsm (aliases) + tests
+- [ ] Model.indexCustomers + resolveAsm (buyer_code→master; NON_ASM_OWNERS→UNASSIGNED; missing→UNMAPPED_BUYER) + tests
 - [ ] tests/fixtures: synthetic csv dump (≥40 lines, all buckets, internal, partial reject)
 - [ ] Store: ensureSheets + read/write DATA, RUNS, EVENTS, HISTORY (batched)
-- [ ] Store: read ASM_MASTER, INTERNAL_CANCELS
+- [ ] Store: read CUSTOMER_MASTER, ASM_MASTER, INTERNAL_CANCELS
+- [ ] Setup: import Custr_Master.xlsx "Cust_code" tab into CUSTOMER_MASTER sheet (one-off, documented)
 - [ ] Ingest: Gmail find newest unprocessed message (iterate thread messages, dedupe via RUNS msgId)
 - [ ] Ingest: attachment → 2D array (csv parse; xlsx via Drive convert + trash)
 - [ ] Ingest: runIngest orchestration with LockService + RUNS logging

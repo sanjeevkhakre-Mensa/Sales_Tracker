@@ -33,8 +33,14 @@
 - Idempotent: re-running same message produces no new EVENTS.
 
 ## R6 Roles
-- ASM_MASTER: name, aliases (pipe-separated), email, role (ASM|MANAGER|ADMIN), region, active.
-- SO's ASM resolved by alias match; unresolved → "UNASSIGNED" (admin only).
+- CUSTOMER_MASTER sheet (from user's Custr_Master.xlsx, tab "Cust_code"; Sheet1 = Zoho export, ignore):
+  join dump `buyer_code` = master `META CODE`. Gives asm, rsm, ase, zone, region, channel, businessType, empCode, activeL3M.
+  Verified 2026-10-14: 53/53 pivot buyers match. 830 master rows have no META CODE (skip). 5 duplicate codes, all consistent → first wins.
+- ASM_MASTER: person → email + role (ASM|MANAGER|ADMIN), aliases. Master has names only, no emails.
+- SO's ASM = master `AREAS SALES MANAGER/OWNER` (trimmed, case-insensitive vs ASM_MASTER aliases).
+  Non-person values (Config.NON_ASM_OWNERS: OTHERS, NA, Dmart, Reliance, INSTITUTIONS, Vacant ASM, Vacant ASE) → asm "UNASSIGNED", still visible to their RSM + admin.
+  buyer_code not in master → "UNMAPPED_BUYER" (admin alert).
+- MANAGER scope = RSM (`REGION SALES MANGER`) sees buyers where they are RSM; ADMIN sees all.
 - Web App: execute as owner, access = domain. Viewer = Session.getActiveUser().getEmail() → role. ASM sees own SOs; MANAGER/ADMIN all.
 
 ## R7 Notifications
@@ -52,10 +58,10 @@
 - See design-system.md.
 
 ## Open questions (source gaps, 2026-10-14)
-- Q1 ASM: no column. Map via ASM_MASTER on buyer / buyer_code / master_buyer / brand?
+- ~~Q1 ASM~~ → CUSTOMER_MASTER by buyer_code (R6). ~~Q4 Region~~ → master REGION/ZONE.
+- Q11 ASM_MASTER emails for the ~17 real ASMs + RSMs (master has none).
 - Q2 Narration: no column. Is review_comment the cancel/reject remark? Else need another export column.
 - Q3 Cancelled-by: no column → internal cancels only via keywords + INTERNAL_CANCELS sheet unless added.
-- Q4 Region: derive from buyer_city via a CITY→REGION map, or from ASM_MASTER?
 - Q5 Exclude so_type INTERNAL_STOCK_TRANSFER from all KPIs?
 - ~~Q6 Amount basis~~ → `total amount` (confirmed via pivot).
 - Q7 Row cap: is the CSV limited to 2,000 rows?

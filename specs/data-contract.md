@@ -30,6 +30,7 @@
 | approvalPendingAt | ~approval_pending… |
 | markedOpenAt / approvedAt | ~marked_as_open_t… / approved_time |
 | buyerCity | buyer_city |
+| asm / rsm / ase / region / zone / channelGroup | joined from CUSTOMER_MASTER on buyer_code |
 
 ### so_status values (from user pivot, 2026-10-14) → default bucket
 | so_status | bucket |
@@ -110,6 +111,7 @@ STOCK, RATE, CREDIT, PO, SKU_DISCONTINUED, QTY, BUYER, OTHER (fallback; also bla
 - DATA: canonical fields. RUNS: runId, msgId, receivedAt, startedAt, status, rowsIn, rowsKept, error.
 - EVENTS: runId, at, type, soNo, sku, asm, fromBucket, toBucket, amount, narration, reason.
 - HISTORY: runId, at, asm, bucket, count, amount.
+- CUSTOMER_MASTER (headers as in Custr_Master.xlsx "Cust_code"): CUSTOMER ID, META CODE (=buyer_code), Active in L3M, CUSTOMER NAME AS PER GST, Customer Name, TYPE, ZONE, City, STATE, BUSINNES TYPE, REGION SALES MANGER (rsm), CHANNEL, REGION, ASE/BDE (ase), AREAS SALES MANAGER/OWNER (asm), EMP Code. Header typos are real — alias them in Config.COLUMNS_CUSTOMER.
 - ASM_MASTER: name, aliases, email, role, region, active. INTERNAL_CANCELS: soNo, note, addedBy, addedAt.
 - NOTIFY_LOG: at, to, asm, kind, hash. CONFIG_OVERRIDES (optional key/value).
 

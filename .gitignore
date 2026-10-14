@@ -6,3 +6,7 @@ shots/
 *.log
 .env
 reports/
+*.xlsx
+*.xls
+*.csv
+!tests/fixtures/*.csv
