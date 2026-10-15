@@ -93,6 +93,18 @@ test('buildSnapshot joins owner from customer master; unknown buyer → Unmapped
   assert.deepEqual(s.unmappedBuyers, ['BY900099']);
 });
 
+test('buildSnapshot emits buyer details for tooltips (master first, dump city fallback)', () => {
+  const s = snap();
+  assert.deepEqual(s.buyers.BY900001, { name: 'ALPHA TRADERS', owner: 'Ravi Kumar', rsm: 'Anil Mehta', region: 'Supp-ROM', city: 'Pune' });
+  const unmapped = s.buyers.BY900099;
+  assert.equal(unmapped.owner, 'Unmapped');
+  assert.equal(unmapped.rsm, '');
+  assert.equal(unmapped.city, 'Surat');
+  assert.equal(unmapped.name, 'NEW PARTY');
+  const codes = Array.from(new Set(s.sos.map((x) => x.c))).sort();
+  assert.deepEqual(Object.keys(s.buyers).sort(), codes);
+});
+
 test('buildSnapshot flags unknown statuses and keeps them as OTHER bucket', () => {
   const s = snap();
   assert.deepEqual(s.unknownStatuses, ['ON_HOLD']);

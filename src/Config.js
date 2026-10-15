@@ -22,6 +22,7 @@ var CONFIG = {
     soStatus: ['so_status'],
     soDate: ['so_date'],
     poNo: ['po_number'],
+    buyerCity: ['buyer_city'],
     buyer: ['buyer'],
     buyerCode: ['buyer_code'],
     sku: ['sku_id'],
@@ -39,7 +40,8 @@ var CONFIG = {
     owner: ['areas sales manager/owner', 'areas sales manager / owner'],
     rsm: ['region sales manger', 'region sales manager'],
     region: ['region'],
-    name: ['customer name']
+    name: ['customer name'],
+    city: ['city']
   },
   // Owner values that are not people → shown as "Unassigned".
   NON_OWNER_VALUES: ['', '-', 'na', 'others', 'dmart', 'reliance', 'institutions', 'vacant asm', 'vacant ase'],

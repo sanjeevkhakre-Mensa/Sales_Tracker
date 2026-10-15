@@ -42,9 +42,11 @@
 - [ ] ASM tab: sortable ASM table
 - [ ] Buyers tab: pivot table (buyer × so_status, sum total amount, grand totals, raw/bucket toggle, drill-down, CSV)
 - [ ] Cancel & Reject tab: list with narration, reason pills, SKU-level rows, reasons bar
-- [ ] SO Detail tab: search + line table
+- [x] SO Detail tab: search + line table (Sales orders tab; party click → #sos?party=CODE; hover tooltips)
+- [x] Buyer-wise ↔ SO-wise navigation: #buyers / #sos?buyer=CODE (legacy #parties, party= kept), removable buyer chip, back restores scroll+focus; snapshot.buyers (ASM/RSM/region/city) feeds buyer tooltip
+- [x] SO-wise summary: KPI cards + status composition per SO number, scoped by buyer/owner/search (status chips filter only the list)
 - [ ] CSV export of filtered rows
-- [ ] scripts/preview.js: serve Dashboard with fixture payload + google.script.run stub
+- [x] scripts/preview.js: build dist/preview.html with fixture payload + google.script.run stub
 - [ ] scripts/shot.js: Playwright screenshots 390px/1440px light+dark
 - [ ] scripts/inspect.js: print fixture KPIs/events summary
 

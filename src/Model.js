@@ -8,7 +8,7 @@
 function ModelFactory() {
   'use strict';
 
-  var VERSION = '0.2.0';
+  var VERSION = '0.3.0';
 
   /** Lowercase, trim, treat "_" and runs of whitespace as one space. */
   function normalizeHeader(h) {
@@ -92,7 +92,8 @@ function ModelFactory() {
         owner: skip.indexOf(normalizeHeader(rawOwner)) > -1 ? 'Unassigned' : titleCase(rawOwner),
         rsm: 'rsm' in ix ? titleCase(String(row[ix.rsm] || '').trim()) : '',
         region: 'region' in ix ? String(row[ix.region] || '').trim() : '',
-        name: 'name' in ix ? String(row[ix.name] || '').trim() : ''
+        name: 'name' in ix ? String(row[ix.name] || '').trim() : '',
+        city: 'city' in ix ? titleCase(String(row[ix.city] || '').trim()) : ''
       };
     }
     return out;
@@ -113,7 +114,7 @@ function ModelFactory() {
     config.STATUSES.forEach(function (s) { known[s.key] = s; });
     var customers = opts.customers || {};
 
-    var bySo = {}, order = [], unknown = {}, unmapped = {};
+    var bySo = {}, order = [], unknown = {}, unmapped = {}, buyers = {};
     var stats = { rowsIn: Math.max(0, table.length - 1), rowsKept: 0, droppedType: 0, droppedMonth: 0, droppedBadDate: 0 };
 
     for (var r = 1; r < table.length; r++) {
@@ -133,6 +134,15 @@ function ModelFactory() {
       var cust = customers[code];
       if (!cust) unmapped[code] = true;
       var amount = parseAmount(get('amount'));
+      if (!buyers[code]) {
+        buyers[code] = {
+          name: (cust && cust.name) || String(get('buyer') || '').trim(),
+          owner: cust ? cust.owner : 'Unmapped',
+          rsm: cust ? cust.rsm : '',
+          region: cust ? cust.region : '',
+          city: (cust && cust.city) || titleCase(String(get('buyerCity') || '').trim())
+        };
+      }
 
       var rec = bySo[so];
       if (!rec) {
@@ -168,6 +178,7 @@ function ModelFactory() {
       exclude: (config.EXCLUDE_FROM_REPORT || []).slice(),
       unknownStatuses: Object.keys(unknown),
       unmappedBuyers: Object.keys(unmapped).filter(Boolean),
+      buyers: buyers,
       sos: sos
     };
   }

@@ -14,6 +14,7 @@
   // ---------- formatting ----------
   function inr(n){return "₹"+Math.round(n).toLocaleString("en-IN");}
   function inrShort(n){if(n>=1e7)return "₹"+(n/1e7).toFixed(2)+" Cr";if(n>=1e5)return "₹"+(n/1e5).toFixed(1)+" L";return inr(n);}
+  function plural(n,w){return n+" "+w+(n===1?"":"s");}
   function pct(a,b){return b?(a/b*100).toFixed(1)+"%":"–";}
   function qty(n){return Math.round(n).toLocaleString("en-IN");}
   function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
@@ -36,7 +37,7 @@
 
   // ---------- state ----------
   var S=null, STATUSES=[], rows=[], grandAll=0, ownerList=[];
-  var state={q:"",owner:"",mode:"status",sort:{key:"total",dir:-1}};
+  var state={q:"",owner:"",mode:"status",view:"parties",sort:{key:"total",dir:-1}};
   try{var saved=JSON.parse(localStorage.getItem("soOrderBook")||"null");if(saved){if(saved.mode)state.mode=saved.mode;if(saved.owner)state.owner=saved.owner;}}catch(e){}
   function persist(){try{localStorage.setItem("soOrderBook",JSON.stringify({mode:state.mode,owner:state.owner}));}catch(e){}}
 
@@ -56,6 +57,9 @@
       r.s[o.st]=(r.s[o.st]||0)+o.amt;r.b[bucketOf[o.st]||"OTHER"]+=o.amt;r.total+=o.amt;r.sos.push(o);
     });
     rows=Object.keys(byCode).map(function(k){return byCode[k];}).filter(function(r){return r.total>0;});
+    ST={};STATUSES.forEach(function(s){ST[s.key]=s;});
+    soById={};allSos=S.sos.filter(function(o){return !excl[o.st];});
+    allSos.forEach(function(o){var q=0;o.lines.forEach(function(l){q+=l[2];});o._q=q;soById[o.so]=o;});
     grandAll=rows.reduce(function(a,r){return a+r.total;},0);
     var m={};rows.forEach(function(r){m[r.owner]=m[r.owner]||{name:r.owner,n:0,v:0};m[r.owner].n++;m[r.owner].v+=r.total;});
     ownerList=Object.keys(m).map(function(k){return m[k];}).sort(function(a,b){return b.v-a.v;});
@@ -99,21 +103,32 @@
     });
   }
 
+  /** Summary items: buyer rows on Buyer-wise; one item per SO number on SO-wise (same buyer/owner/search scope as the SO list). */
+  function summaryScope(){
+    if(state.view!=="sos")return {items:scope(),unit:"buyer",narrowed:!!state.owner,label:state.owner||"All owners"};
+    var items=soScope().map(function(o){
+      var b={BILLED:0,OPEN:0,PENDING:0,OTHER:0},s={};b[statusOf(o.st).bucket||"OTHER"]=o.amt;s[o.st]=o.amt;
+      return {total:o.amt,b:b,s:s};
+    });
+    var p=so.party?partyOf(so.party):null;
+    return {items:items,unit:"SO",narrowed:!!(state.owner||so.party||state.q.trim()),
+      label:so.party?(p?p.buyer:so.party):state.q.trim()?"Search results":state.owner||"All owners"};
+  }
   function renderSummary(){
-    var sc=scope(),placed=0,b={BILLED:0,OPEN:0,PENDING:0},n={BILLED:0,OPEN:0,PENDING:0},tot={};
+    var ss=summaryScope(),sc=ss.items,placed=0,b={BILLED:0,OPEN:0,PENDING:0},n={BILLED:0,OPEN:0,PENDING:0},tot={};
     STATUSES.forEach(function(s){tot[s.key]=0;});
     sc.forEach(function(r){placed+=r.total;BUCKETS.forEach(function(k){b[k.key]+=r.b[k.key];if(r.b[k.key]>0)n[k.key]++;});STATUSES.forEach(function(s){tot[s.key]+=r.s[s.key]||0;});});
     var P=K.PLACED;
     tween(P.value,placed,inrShort);P.value.title=inr(placed);
-    P.exact.textContent=inr(placed);P.n.textContent=sc.length+" parties";
-    P.bar.style.width=(state.owner&&grandAll?placed/grandAll*100:100)+"%";
-    P.from.textContent=state.owner||"All owners";P.share.textContent=state.owner?pct(placed,grandAll)+" of all":"100%";
+    P.exact.textContent=inr(placed);P.n.textContent=plural(sc.length,ss.unit);
+    P.bar.style.width=(ss.narrowed&&grandAll?placed/grandAll*100:100)+"%";
+    P.from.textContent=ss.label;P.share.textContent=ss.narrowed?pct(placed,grandAll)+" of all":"100%";
     BUCKETS.forEach(function(k){
       var t=K[k.key];tween(t.value,b[k.key],inrShort);t.value.title=inr(b[k.key]);
-      t.exact.textContent=inr(b[k.key]);t.n.textContent=n[k.key]+" parties";
+      t.exact.textContent=inr(b[k.key]);t.n.textContent=plural(n[k.key],ss.unit);
       t.bar.style.width=(placed?b[k.key]/placed*100:0)+"%";t.from.textContent=t.fromText;t.share.textContent=pct(b[k.key],placed);
     });
-    $("compTotal").textContent=inr(placed)+" across "+sc.length+" parties";
+    $("compTotal").textContent=inr(placed)+" across "+plural(sc.length,ss.unit);
     STATUSES.forEach(function(s){var c=C[s.key];if(!c)return;c.bar.style.width=(placed?tot[s.key]/placed*100:0)+"%";c.bar.title=s.label+" "+inr(tot[s.key]);c.val.textContent=inrShort(tot[s.key]);c.pct.textContent=pct(tot[s.key],placed);});
     $("compBar").setAttribute("aria-label","Status composition: "+STATUSES.map(function(s){return s.label+" "+pct(tot[s.key],placed);}).join(", "));
   }
@@ -125,7 +140,7 @@
     var getter=sk==="buyer"?function(r){return r.buyer.toLowerCase();}:sk==="total"?function(r){return r.total;}:(function(){var c=cols.filter(function(c){return c.key===sk;})[0];return c?c.get:function(r){return r.total;};})();
     data.sort(function(a,b){var x=getter(a),y=getter(b);return x<y?-dir:x>y?dir:0;});
     function th(key,label,cls,color){var s=sk===key?(dir>0?"ascending":"descending"):"none";return '<th scope="col" class="'+(cls||"")+'" aria-sort="'+s+'"><button type="button" class="sort" data-key="'+key+'">'+(color?'<i style="background:'+color+'"></i>':'')+esc(label)+ARROW+'</button></th>';}
-    var h='<tr><th scope="col" class="l" aria-label="Rank">#</th>'+th("buyer","Party","l");
+    var h='<tr><th scope="col" class="l" aria-label="Rank">#</th>'+th("buyer","Buyer","l");
     cols.forEach(function(c){h+=th(c.key,c.label,"",c.color);});
     h+=th("total","Total","total")+'<th scope="col">Share of total</th></tr>';
 
@@ -133,7 +148,7 @@
     data.forEach(function(r,i){
       var parts=STATUSES.map(function(s){return {v:r.s[s.key]||0,color:s.color};});
       var anim=!firstPaint&&i<12,d=anim?' style="--d:'+i*28+'ms"':'',cls=anim?' class="in"':'';
-      var party='<button type="button" class="party" data-code="'+esc(r.code)+'" title="View sales orders">'+esc(r.buyer)+CHEV+'</button>';
+      var party='<button type="button" class="party" data-code="'+esc(r.code)+'" data-tip="party">'+esc(r.buyer)+CHEV+'</button>';
       body+='<tr'+cls+d+'><td class="rank num">'+(i+1)+'</td><td class="buyer l">'+party+'</td>';
       cols.forEach(function(c){var v=c.get(r);ft[c.key]+=v;body+=v?'<td class="num">'+inr(v)+'</td>':'<td class="num zero">—</td>';});
       gt+=r.total;
@@ -142,16 +157,15 @@
         '<div class="stack'+(anim?'':' still')+'"'+d+' aria-hidden="true">'+stackHtml(parts,r.total)+'</div>'+
         '<div class="chips num">'+cols.filter(function(c){return c.get(r)>0;}).map(function(c){return '<span><i style="background:'+c.color+'"></i>'+esc(c.label)+' '+inrShort(c.get(r))+'</span>';}).join("")+'</div></li>';
     });
-    var emptyMsg=!rows.length?'<b>No orders in scope yet</b>The latest dump has no offline SOs for this month.':'<b>No parties match these filters</b>Try a different search'+(state.owner?' or set Owner to All':'')+'.';
+    var emptyMsg=!rows.length?'<b>No orders in scope yet</b>The latest dump has no offline SOs for this month.':'<b>No buyers match these filters</b>Try a different search'+(state.owner?' or set Owner to All':'')+'.';
     if(!data.length){body='<tr><td class="empty" colspan="'+(cols.length+4)+'">'+emptyMsg+'</td></tr>';ml='<li class="empty">'+emptyMsg+'</li>';}
     var f='<tr><td></td><td class="l">Total</td>';
     cols.forEach(function(c){f+='<td class="num">'+(ft[c.key]?inr(ft[c.key]):"—")+'</td>';});
     f+='<td class="num total">'+inr(gt)+'</td><td class="num">'+pct(gt,scopeTotal)+'</td></tr>';
     var t=$("pivot");t.tHead.innerHTML=h;t.tBodies[0].innerHTML=body;t.tFoot.innerHTML=f;
     $("mlist").innerHTML=ml;
-    $("mtotal").innerHTML='<span>Total · '+data.length+' parties</span><span>'+inr(gt)+'</span>';
-    $("rowCount").textContent=data.length===rows.length?rows.length+" parties":data.length+" of "+rows.length;
-    $("clearAll").hidden=!(state.owner||state.q);
+    $("mtotal").innerHTML='<span>Total · '+plural(data.length,"buyer")+'</span><span>'+inr(gt)+'</span>';
+    $("rowCount").textContent=data.length===rows.length?plural(rows.length,"buyer"):data.length+" of "+rows.length;
     firstPaint=false;
   }
 
@@ -169,9 +183,9 @@
     var fl=[];
     if(st.capWarning)fl.push('<span class="flag warn" title="Metabase attachments can be capped; some SOs may be missing.">'+WARN+'Dump hit '+qty(st.rowsIn)+' rows: may be truncated</span>');
     if((S.unknownStatuses||[]).length)fl.push('<span class="flag warn" title="Add these to CONFIG.STATUSES">'+WARN+'New status: '+esc(S.unknownStatuses.join(", "))+'</span>');
-    if((S.unmappedBuyers||[]).length)fl.push('<span class="flag warn" title="'+esc(S.unmappedBuyers.join(", "))+'">'+WARN+S.unmappedBuyers.length+' party code'+(S.unmappedBuyers.length>1?'s':'')+' not in customer master</span>');
+    if((S.unmappedBuyers||[]).length)fl.push('<span class="flag warn" title="'+esc(S.unmappedBuyers.join(", "))+'">'+WARN+S.unmappedBuyers.length+' buyer code'+(S.unmappedBuyers.length>1?'s':'')+' not in customer master</span>');
     (S.warnings||[]).forEach(function(w){fl.push('<span class="flag warn">'+WARN+esc(w)+'</span>');});
-    if(!fl.length)fl.push('<span class="flag ok">'+TICK+'All parties mapped</span>');
+    if(!fl.length)fl.push('<span class="flag ok">'+TICK+'All buyers mapped</span>');
     $("flags").innerHTML=fl.join("");
     renderFreshness();
   }
@@ -190,73 +204,256 @@
 
   function fillOwners(){
     var sel=$("owner");
-    sel.innerHTML='<option value="">All owners ('+ownerList.length+')</option>'+ownerList.map(function(a){return '<option value="'+esc(a.name)+'">'+esc(a.name)+' — '+a.n+' part'+(a.n>1?'ies':'y')+', '+inrShort(a.v)+'</option>';}).join("");
+    sel.innerHTML='<option value="">All owners ('+ownerList.length+')</option>'+ownerList.map(function(a){return '<option value="'+esc(a.name)+'">'+esc(a.name)+' — '+plural(a.n,"buyer")+', '+inrShort(a.v)+'</option>';}).join("");
     sel.value=state.owner;
   }
 
-  function render(){renderSummary();renderTable();}
-
-  // ---------- SO drill-down ----------
-  var dr={code:null,status:"",open:{}};
-  function openParty(code){
-    var r=rows.filter(function(x){return x.code===code;})[0];if(!r)return;
-    dr={code:code,status:"",open:{}};
-    $("drTitle").textContent=r.buyer;
-    $("drMeta").textContent=r.code+" · Owner: "+r.owner;
-    renderDrawer();
-    var dlg=$("drawer");if(!dlg.open){if(dlg.showModal)dlg.showModal();else dlg.setAttribute("open","");}
-    $("drClose").focus();
+  function render(){
+    hideTip();
+    $("tabPartiesN").textContent=scope().length;
+    $("tabSosN").textContent=allSos.filter(function(o){return !state.owner||o.o===state.owner;}).length;
+    renderSummary();if(state.view==="sos")renderSos();else renderTable();
+    $("clearAll").hidden=!(state.owner||state.q||(state.view==="sos"&&(so.party||so.st)));
   }
-  function renderDrawer(){
-    var r=rows.filter(function(x){return x.code===dr.code;})[0];if(!r)return closeDrawer();
-    var counts={};r.sos.forEach(function(o){counts[o.st]=(counts[o.st]||0)+1;});
-    $("drTotal").textContent=inr(r.total);
-    $("drCount").textContent=r.sos.length+" SO"+(r.sos.length>1?"s":"")+" · "+pct(r.total,grandAll)+" of all parties";
-    var chips='<button type="button" class="fchip" data-st="" aria-pressed="'+(!dr.status)+'">All <span>'+r.sos.length+'</span></button>';
-    STATUSES.forEach(function(s){if(!counts[s.key])return;chips+='<button type="button" class="fchip" data-st="'+s.key+'" aria-pressed="'+(dr.status===s.key)+'"><i style="background:'+s.color+'"></i>'+esc(s.label)+' <b class="num">'+inrShort(r.s[s.key])+'</b><span>'+counts[s.key]+'</span></button>';});
-    $("drFilters").innerHTML=chips;
-    var list=r.sos.filter(function(o){return !dr.status||o.st===dr.status;}).slice().sort(function(a,b){return a.d<b.d?1:a.d>b.d?-1:(a.so<b.so?1:-1);});
-    var t=$("soTable");
-    t.tHead.innerHTML='<tr><th class="l">SO number</th><th class="l">SO date</th><th class="l">Status</th><th class="l hide-sm">PO number</th><th class="hide-sm">SKUs</th><th class="hide-sm">Qty</th><th>Amount</th></tr>';
-    var b="",sum=0;
+
+  // ---------- SO-wise view (#sos?buyer=CODE&st=STATUS) ----------
+  var allSos=[],soById={},ST={};
+  var so={party:"",st:"",sort:{key:"d",dir:-1},open:{}};
+  function statusOf(k){return ST[k]||{key:k,label:k,color:"var(--s-other)"};}
+  function pillHtml(s){return '<span class="pill" style="--c:'+s.color+'"><i></i>'+esc(s.label)+'</span>';}
+  function partyOf(code){return rows.filter(function(x){return x.code===code;})[0]||null;}
+  function soScope(){
+    var q=state.q.trim().toLowerCase();
+    return allSos.filter(function(o){
+      if(state.owner&&o.o!==state.owner)return false;
+      if(so.party&&o.c!==so.party)return false;
+      return !q||o.so.toLowerCase().indexOf(q)>-1||(o.po||"").toLowerCase().indexOf(q)>-1||o.b.toLowerCase().indexOf(q)>-1||o.c.toLowerCase().indexOf(q)>-1||o.o.toLowerCase().indexOf(q)>-1;
+    });
+  }
+  function soColumns(){
+    return [
+      {key:"so",label:"SO number",cls:"l"},
+      {key:"d",label:"SO date",cls:"l hide-sm"},
+      so.party?null:{key:"b",label:"Buyer",cls:"l hide-sm"},
+      so.party?null:{key:"o",label:"Owner",cls:"l hide-sm"},
+      {key:"st",label:"Status",cls:"l hide-sm"},
+      {key:"po",label:"PO number",cls:"l hide-sm"},
+      {key:"n",label:"SKUs",cls:"hide-sm"},
+      {key:"q",label:"Qty",cls:"hide-sm"},
+      {key:"amt",label:"Amount",cls:"total"}
+    ].filter(Boolean);
+  }
+  function soGet(k){
+    if(k==="st")return function(o){return statusOf(o.st).label.toLowerCase();};
+    if(k==="n")return function(o){return o.lines.length;};
+    if(k==="q")return function(o){return o._q;};
+    if(k==="amt")return function(o){return o.amt;};
+    return function(o){return String(o[k]||"").toLowerCase();};
+  }
+  function renderSos(){
+    var base=soScope(),cols=soColumns(),p=so.party?partyOf(so.party):null;
+    if(!cols.some(function(c){return c.key===so.sort.key;}))so.sort={key:"d",dir:-1};
+    var counts={},amts={};base.forEach(function(o){counts[o.st]=(counts[o.st]||0)+1;amts[o.st]=(amts[o.st]||0)+o.amt;});
+    var bName=p?p.buyer:((base[0]||{}).b||so.party);
+    var chips=so.party?'<button type="button" class="fchip bchip" data-clear="buyer" aria-label="Remove buyer filter: '+esc(bName)+'"><span class="k">Buyer</span>'+esc(bName)+'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M5 5l6 6M11 5l-6 6"/></svg></button><span class="fsep" aria-hidden="true"></span>':'';
+    chips+='<button type="button" class="fchip" data-st="" aria-pressed="'+(!so.st)+'">All <span>'+base.length+'</span></button>';
+    STATUSES.forEach(function(s){if(!counts[s.key]&&so.st!==s.key)return;chips+='<button type="button" class="fchip" data-st="'+s.key+'" aria-pressed="'+(so.st===s.key)+'"><i style="background:'+s.color+'"></i>'+esc(s.label)+' <b class="num">'+inrShort(amts[s.key]||0)+'</b><span>'+(counts[s.key]||0)+'</span></button>';});
+    $("soFilters").innerHTML=chips;
+
+    var list=base.filter(function(o){return !so.st||o.st===so.st;});
+    var g=soGet(so.sort.key),dir=so.sort.dir;
+    list.sort(function(a,b){var x=g(a),y=g(b);return x<y?-dir:x>y?dir:(a.so<b.so?1:-1);});
+
+    var sum=0,skus=0,units=0;list.forEach(function(o){sum+=o.amt;skus+=o.lines.length;units+=o._q;});
+    var allTotal=base.reduce(function(a,o){return a+o.amt;},0);
+    $("soTitle").textContent=so.party?bName:"SO-wise view";
+    $("soBack").hidden=!so.party;
+    $("soMeta").innerHTML=so.party
+      ?buyerFacts(so.party).map(function(f){return '<span>'+esc(f)+'</span>';}).join("")+'<button type="button" class="link-btn" id="soAll">Show all buyers</button>'
+      :'<span>'+(state.owner?'Owner: '+esc(state.owner)+' · ':'')+(CAN_HOVER?'Hover':'Tap')+' an SO to see its SKUs</span>';
+    $("soCount").textContent=list.length===allSos.length?list.length+" SOs":list.length+" of "+allSos.length+" SOs";
+    $("soTotal").textContent=inr(sum);
+    $("soShare").textContent=so.party?pct(allTotal,grandAll)+" of all buyers":pct(sum,grandAll)+" of all orders";
+
+    var sk=so.sort.key;
+    var h='<tr>'+cols.map(function(c){var s=sk===c.key?(dir>0?"ascending":"descending"):"none";return '<th scope="col" class="'+c.cls+'" aria-sort="'+s+'"><button type="button" class="sort" data-key="'+c.key+'">'+esc(c.label)+ARROW+'</button></th>';}).join("")+'</tr>';
+    var body="";
     list.forEach(function(o){
-      var s=STATUSES.filter(function(x){return x.key===o.st;})[0]||{label:o.st,color:"var(--s-other)"};
-      var q=0;o.lines.forEach(function(l){q+=l[2];});sum+=o.amt;
-      var open=!!dr.open[o.so];
-      b+='<tr class="so" tabindex="0" data-so="'+esc(o.so)+'" aria-expanded="'+open+'"><td class="l"><span class="sono">'+CHEV+esc(o.so)+'</span></td><td class="l muted num">'+fmtDay(o.d)+'</td>'+
-        '<td class="l"><span class="pill" style="--c:'+s.color+'"><i></i>'+esc(s.label)+'</span></td><td class="l muted hide-sm">'+esc(o.po||"—")+'</td>'+
-        '<td class="num hide-sm">'+o.lines.length+'</td><td class="num hide-sm">'+qty(q)+'</td><td class="num"><b>'+inr(o.amt)+'</b></td></tr>';
+      var open=!!so.open[o.so];
+      var cell={
+        so:'<td class="l"><span class="sono">'+CHEV+esc(o.so)+'</span><div class="so-sub"><span>'+(so.party?'':esc(o.b)+' · ')+fmtDay(o.d)+'</span>'+pillHtml(statusOf(o.st))+'</div></td>',
+        d:'<td class="l muted num hide-sm">'+fmtDay(o.d)+'</td>',
+        b:'<td class="l pcell hide-sm"><button type="button" class="plink" data-code="'+esc(o.c)+'" data-tip="party">'+esc(o.b)+'</button></td>',
+        o:'<td class="l muted hide-sm">'+esc(o.o)+'</td>',
+        st:'<td class="l hide-sm">'+pillHtml(statusOf(o.st))+'</td>',
+        po:'<td class="l muted hide-sm">'+esc(o.po||"—")+'</td>',
+        n:'<td class="num hide-sm">'+o.lines.length+'</td>',
+        q:'<td class="num hide-sm">'+qty(o._q)+'</td>',
+        amt:'<td class="num total">'+inr(o.amt)+'</td>'
+      };
+      body+='<tr class="so" tabindex="0" data-so="'+esc(o.so)+'" data-tip="so" aria-expanded="'+open+'">'+cols.map(function(c){return cell[c.key];}).join("")+'</tr>';
       if(open){
-        b+='<tr class="lines"><td colspan="7"><table class="sub"><thead><tr><th class="l">SKU</th><th class="l hide-sm">Description</th><th>Ordered</th><th>Invoiced</th><th class="hide-sm">Cancelled</th><th>Amount</th></tr></thead><tbody>'+
+        body+='<tr class="lines"><td colspan="'+cols.length+'"><table class="sub"><thead><tr><th class="l">SKU</th><th class="l hide-sm">Description</th><th>Ordered</th><th>Invoiced</th><th class="hide-sm">Cancelled</th><th>Amount</th></tr></thead><tbody>'+
           o.lines.map(function(l){return '<tr><td class="l num">'+esc(l[0])+'</td><td class="l desc hide-sm">'+esc(l[1])+'</td><td class="num">'+qty(l[2])+'</td><td class="num">'+qty(l[3])+'</td><td class="num hide-sm'+(l[4]?' cq':'')+'">'+(l[4]?qty(l[4]):'—')+'</td><td class="num">'+inr(l[5])+'</td></tr>';}).join("")+
           '</tbody></table></td></tr>';
       }
     });
-    if(!list.length)b='<tr><td class="empty" colspan="7"><b>No sales orders</b>Nothing in this status.</td></tr>';
-    t.tBodies[0].innerHTML=b;
-    $("drFoot").innerHTML='<span>'+list.length+' SO'+(list.length!==1?'s':'')+(dr.status?' · '+esc((STATUSES.filter(function(x){return x.key===dr.status;})[0]||{}).label):'')+'</span><span>Total <b>'+inr(sum)+'</b></span>';
+    if(!list.length){
+      var why=!allSos.length?'<b>No orders in scope yet</b>The latest dump has no offline SOs for this month.':'<b>No sales orders match</b>'+(so.st?'Nothing in this status. ':'')+'Try clearing filters'+(so.party?' or show all buyers':'')+'.';
+      body='<tr><td class="empty" colspan="'+cols.length+'">'+why+'</td></tr>';
+    }
+    var foot={so:'<td class="l">Total · '+list.length+' SO'+(list.length!==1?'s':'')+'</td>',n:'<td class="num hide-sm">'+qty(skus)+'</td>',q:'<td class="num hide-sm">'+qty(units)+'</td>',amt:'<td class="num total">'+inr(sum)+'</td>'};
+    var t=$("soList");t.tHead.innerHTML=h;t.tBodies[0].innerHTML=body;
+    t.tFoot.innerHTML='<tr>'+cols.map(function(c){return foot[c.key]||'<td class="'+(c.cls.indexOf("hide-sm")>-1?'hide-sm':'')+'"></td>';}).join("")+'</tr>';
   }
-  function closeDrawer(){var dlg=$("drawer");if(dlg.open){if(dlg.close)dlg.close();else dlg.removeAttribute("open");}}
+
+  // ---------- routing: #buyers | #sos?buyer=CODE&st=STATUS (legacy #parties, party= still accepted) ----------
+  function readHash(){
+    var h=location.hash.replace(/^#/,"").split("?"),r={view:h[0]==="sos"?"sos":"parties",party:"",st:""};
+    (h[1]||"").split("&").forEach(function(kv){var i=kv.indexOf("=");if(i<0)return;var k=kv.slice(0,i),v=decodeURIComponent(kv.slice(i+1));if(k==="buyer"||k==="party")r.party=v;else if(k==="st")r.st=v;});
+    return r;
+  }
+  function hashFor(view,party,st){
+    if(view!=="sos")return "#buyers";
+    var q=[];if(party)q.push("buyer="+encodeURIComponent(party));if(st)q.push("st="+encodeURIComponent(st));
+    return "#sos"+(q.length?"?"+q.join("&"):"");
+  }
+  function nav(view,party,st,replace){
+    var h=hashFor(view,party,st);
+    if(location.hash===h||(!location.hash&&h==="#buyers")){route();return;}
+    if(replace){try{history.replaceState(null,"",h);}catch(e){location.replace(h);return;}route();return;}
+    location.hash=h;
+  }
+  function route(){
+    var r=readHash(),viewChanged=r.view!==state.view,partyChanged=r.party!==so.party;
+    state.view=r.view;so.party=r.party;so.st=r.st;
+    if(partyChanged)so.open={};
+    var sos=state.view==="sos";
+    $("partiesView").hidden=sos;$("soView").hidden=!sos;$("seg").hidden=sos;
+    $("tabParties").setAttribute("aria-selected",String(!sos));$("tabSos").setAttribute("aria-selected",String(sos));
+    $("tabParties").tabIndex=sos?-1:0;$("tabSos").tabIndex=sos?0:-1;
+    if(!sos)moveThumb();
+    if(S)render();else hideTip();
+    if(viewChanged&&!sos&&backTo){
+      // back to Buyer-wise: restore scroll and focus the buyer we drilled into
+      var y=backTo.y,code=backTo.code;backTo=null;window.scrollTo(0,y);
+      var btn=code&&document.querySelector('#'+(window.innerWidth<=720?'mlist':'pivot')+' button.party[data-code="'+code.replace(/"/g,'')+'"]');
+      if(btn)btn.focus({preventScroll:true});
+    }else if(viewChanged||partyChanged){window.scrollTo(0,0);if(sos&&so.party)$("soTitle").focus({preventScroll:true});}
+  }
+  window.addEventListener("hashchange",route);
+
+  // ---------- tooltip (mouse hover, or keyboard focus) ----------
+  var tip=$("tip"),tipEl=null,tipTimer=null,tipX=0;
+  var CAN_HOVER=!window.matchMedia||window.matchMedia("(hover: hover)").matches;
+  function soTipHtml(o){
+    var lines=o.lines.slice().sort(function(a,b){return b[5]-a[5];}),top=lines.slice(0,5),ord=0,inv=0,can=0;
+    o.lines.forEach(function(l){ord+=l[2];inv+=l[3];can+=l[4];});
+    return '<div class="tip-h"><b>'+esc(o.so)+'</b>'+pillHtml(statusOf(o.st))+'</div>'+
+      '<div class="tip-m">'+esc(o.b)+' · '+esc(o.c)+'</div>'+
+      '<div class="tip-m num">'+fmtDay(o.d)+(o.po?' · PO '+esc(o.po):'')+' · '+esc(o.o)+'</div>'+
+      '<table class="tip-t"><thead><tr><th class="l">Top SKUs</th><th>Qty</th><th>Amount</th></tr></thead><tbody>'+
+      top.map(function(l){return '<tr><td class="l">'+esc(l[1]||l[0])+'</td><td class="num">'+qty(l[2])+'</td><td class="num">'+inr(l[5])+'</td></tr>';}).join("")+
+      '</tbody></table>'+(lines.length>5?'<div class="tip-more">+'+(lines.length-5)+' more SKU'+(lines.length-5>1?'s':'')+'</div>':'')+
+      '<div class="tip-f num"><span>Ordered '+qty(ord)+' · Invoiced '+qty(inv)+(can?' · <em>Cancelled '+qty(can)+'</em>':'')+'</span><b>'+inr(o.amt)+'</b></div>'+
+      '<div class="tip-hint">Click to see all '+o.lines.length+' SKU line'+(o.lines.length>1?'s':'')+'</div>';
+  }
+  /** Code, ASM, RSM, city · region for a buyer (snapshot.buyers; falls back to SO data). */
+  function buyerFacts(code){
+    var d=(S&&S.buyers&&S.buyers[code])||{},r=partyOf(code),f=[code];
+    f.push("ASM: "+(d.owner||(r&&r.owner)||"–"));
+    if(d.rsm)f.push("RSM: "+d.rsm);
+    var loc=[d.city,d.region].filter(Boolean).join(", ");if(loc)f.push(loc);
+    return f;
+  }
+  function partyTipHtml(code){
+    var r=partyOf(code);if(!r)return "";
+    var counts={},latest="",first="";r.sos.forEach(function(o){counts[o.st]=(counts[o.st]||0)+1;if(o.d>latest)latest=o.d;if(!first||o.d<first)first=o.d;});
+    var dates=first===latest?fmtDay(latest):fmtDay(first).slice(0,6)+" – "+fmtDay(latest).slice(0,6);
+    return '<div class="tip-h"><b>'+esc(r.buyer)+'</b><span class="tip-share num">'+pct(r.total,grandAll)+' of total</span></div>'+
+      '<div class="tip-m">'+buyerFacts(code).map(esc).join(" · ")+'</div>'+
+      '<table class="tip-t"><tbody>'+STATUSES.filter(function(s){return counts[s.key];}).map(function(s){return '<tr><td class="l"><i style="background:'+s.color+'"></i>'+esc(s.label)+'</td><td class="num">'+plural(counts[s.key],"SO")+'</td><td class="num">'+inr(r.s[s.key])+'</td></tr>';}).join("")+'</tbody></table>'+
+      '<div class="tip-g num"><span>Avg SO <b>'+inrShort(r.total/r.sos.length)+'</b></span><span>Open + pending <b>'+inrShort(r.b.OPEN+r.b.PENDING)+'</b></span><span>Dates <b>'+dates+'</b></span></div>'+
+      '<div class="tip-f num"><span>'+plural(r.sos.length,"SO")+'</span><b>'+inr(r.total)+'</b></div>'+
+      '<div class="tip-hint">Click to open its SO-wise view</div>';
+  }
+  function tipHtml(el){
+    var k=el.getAttribute("data-tip");
+    if(k==="party")return partyTipHtml(el.getAttribute("data-code"));
+    if(k==="so"&&el.getAttribute("aria-expanded")!=="true"){var o=soById[el.getAttribute("data-so")];return o?soTipHtml(o):"";}
+    return "";
+  }
+  function placeTip(){
+    var r=tipEl.getBoundingClientRect(),w=tip.offsetWidth,h=tip.offsetHeight,vw=document.documentElement.clientWidth,vh=window.innerHeight;
+    var ax=tipEl.tagName==="TR"?tipX:r.left,x=Math.max(8,Math.min(ax-16,vw-w-8)),y=r.bottom+8;
+    if(y+h>vh-8)y=r.top-h-8;
+    if(y<8)y=Math.max(8,vh-h-8);
+    tip.style.left=x+"px";tip.style.top=y+"px";
+  }
+  function showTip(el){
+    var html=tipHtml(el);if(!html){hideTip();return;}
+    if(tipEl&&tipEl!==el)tipEl.removeAttribute("aria-describedby");
+    tipEl=el;el.setAttribute("aria-describedby","tip");
+    tip.innerHTML=html;tip.hidden=false;tip.classList.remove("on");placeTip();void tip.offsetWidth;tip.classList.add("on");
+  }
+  function hideTip(){clearTimeout(tipTimer);if(tipEl)tipEl.removeAttribute("aria-describedby");tipEl=null;tip.classList.remove("on");tip.hidden=true;}
+  document.addEventListener("mouseover",function(e){
+    if(!CAN_HOVER)return;
+    var el=e.target.closest?e.target.closest("[data-tip]"):null;
+    if(el===tipEl)return;
+    clearTimeout(tipTimer);
+    if(!el){hideTip();return;}
+    tipX=e.clientX;var warm=!!tipEl;
+    tipTimer=setTimeout(function(){showTip(el);},warm?60:220);
+  });
+  document.addEventListener("focusin",function(e){
+    var el=e.target;if(!el.getAttribute||!el.getAttribute("data-tip"))return;
+    var kb=false;try{kb=el.matches(":focus-visible");}catch(_){}
+    if(kb){tipX=el.getBoundingClientRect().left+24;showTip(el);}
+  });
+  document.addEventListener("focusout",function(e){if(e.target===tipEl)hideTip();});
+  document.addEventListener("keydown",function(e){if(e.key==="Escape")hideTip();});
+  window.addEventListener("scroll",function(){if(tipEl)hideTip();},{passive:true});
 
   // ---------- events ----------
-  function onPartyClick(e){var b=e.target.closest("button.party");if(b)openParty(b.getAttribute("data-code"));}
+  var backTo=null;
+  function onPartyClick(e){var b=e.target.closest("button.party");if(b){hideTip();backTo={y:window.scrollY,code:b.getAttribute("data-code")};nav("sos",b.getAttribute("data-code"),"");}}
   $("pivot").addEventListener("click",function(e){
     var s=e.target.closest("button.sort");
     if(s){var k=s.getAttribute("data-key");state.sort=state.sort.key===k?{key:k,dir:-state.sort.dir}:{key:k,dir:k==="buyer"?1:-1};renderTable();return;}
     onPartyClick(e);
   });
   $("mlist").addEventListener("click",onPartyClick);
-  $("drFilters").addEventListener("click",function(e){var c=e.target.closest("button.fchip");if(!c)return;dr.status=c.getAttribute("data-st");renderDrawer();});
-  function toggleSo(tr){var so=tr.getAttribute("data-so");dr.open[so]=!dr.open[so];renderDrawer();}
-  $("soTable").addEventListener("click",function(e){var tr=e.target.closest("tr.so");if(tr)toggleSo(tr);});
-  $("soTable").addEventListener("keydown",function(e){var tr=e.target.closest("tr.so");if(tr&&(e.key==="Enter"||e.key===" ")){e.preventDefault();toggleSo(tr);var again=$("soTable").querySelector('tr.so[data-so="'+tr.getAttribute("data-so")+'"]');if(again)again.focus();}});
-  $("drClose").addEventListener("click",closeDrawer);
-  $("drawer").addEventListener("click",function(e){if(e.target===this)closeDrawer();});
+  $("tabParties").addEventListener("click",function(){nav("parties");});
+  $("tabSos").addEventListener("click",function(){if(state.view!=="sos")nav("sos","","");});
+  document.querySelector(".tabs").addEventListener("keydown",function(e){
+    if(e.key!=="ArrowLeft"&&e.key!=="ArrowRight")return;
+    e.preventDefault();var to=state.view==="sos"?"parties":"sos";nav(to,"","");$(to==="sos"?"tabSos":"tabParties").focus();
+  });
+  $("soBack").addEventListener("click",function(){nav("parties");});
+  $("soView").addEventListener("click",function(e){if(e.target.id==="soAll")nav("sos","",so.st);});
+  $("soFilters").addEventListener("click",function(e){var c=e.target.closest("button.fchip");if(!c)return;if(c.getAttribute("data-clear")){nav("sos","",so.st);return;}nav("sos",so.party,c.getAttribute("data-st"),true);});
+  function toggleSo(tr){hideTip();var id=tr.getAttribute("data-so");so.open[id]=!so.open[id];renderSos();}
+  $("soList").addEventListener("click",function(e){
+    var s=e.target.closest("button.sort");
+    if(s){var k=s.getAttribute("data-key"),num=k==="amt"||k==="n"||k==="q"||k==="d";so.sort=so.sort.key===k?{key:k,dir:-so.sort.dir}:{key:k,dir:num?-1:1};renderSos();return;}
+    var p=e.target.closest("button.plink");
+    if(p){hideTip();nav("sos",p.getAttribute("data-code"),"");return;}
+    var tr=e.target.closest("tr.so");if(tr)toggleSo(tr);
+  });
+  $("soList").addEventListener("keydown",function(e){
+    var tr=e.target.closest("tr.so");
+    if(tr&&e.target===tr&&(e.key==="Enter"||e.key===" ")){e.preventDefault();toggleSo(tr);var again=$("soList").querySelector('tr.so[data-so="'+tr.getAttribute("data-so")+'"]');if(again)again.focus();}
+  });
 
   var ownerSel=$("owner"),qIn=$("q");
   ownerSel.addEventListener("change",function(){state.owner=ownerSel.value;persist();if(S)render();});
   var qTimer;qIn.addEventListener("input",function(){clearTimeout(qTimer);qTimer=setTimeout(function(){state.q=qIn.value;if(S)render();},120);});
-  $("clearAll").addEventListener("click",function(){state.owner="";state.q="";ownerSel.value="";qIn.value="";persist();if(S)render();ownerSel.focus();});
+  $("clearAll").addEventListener("click",function(){
+    state.owner="";state.q="";ownerSel.value="";qIn.value="";persist();
+    if(state.view==="sos"&&(so.party||so.st))nav("sos","","",true);else if(S)render();
+    ownerSel.focus();
+  });
 
   var seg=$("seg"),thumb=seg.querySelector(".thumb");
   function moveThumb(){var on=seg.querySelector('button[aria-pressed="true"]');if(!on)return;thumb.style.width=on.offsetWidth+"px";thumb.style.transform="translateX("+on.offsetLeft+"px)";}
@@ -274,14 +471,23 @@
   function toast(msg){var t=document.createElement("div");t.className="toast";t.setAttribute("role","status");t.innerHTML='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"/></svg>'+esc(msg);document.body.appendChild(t);setTimeout(function(){t.remove();},2400);}
   $("copyCsv").addEventListener("click",function(){
     if(!S)return;
-    var cols=columns(),data=filtered();
     var q=function(v){v=String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
-    var lines=[["buyer_code","party","owner"].concat(cols.map(function(c){return c.key.toLowerCase();}),["total"]).join(",")];
+    if(state.view==="sos"){
+      var sl=soScope().filter(function(o){return !so.st||o.st===so.st;});
+      var out=["so_number,so_date,buyer_code,buyer,owner,status,po_number,skus,qty,amount"];
+      sl.forEach(function(o){out.push([q(o.so),o.d,q(o.c),q(o.b),q(o.o),q(statusOf(o.st).label),q(o.po||""),o.lines.length,o._q,Math.round(o.amt*100)/100].join(","));});
+      return copyText(out.join("\n"),sl.length);
+    }
+    var cols=columns(),data=filtered();
+    var lines=[["buyer_code","buyer","owner"].concat(cols.map(function(c){return c.key.toLowerCase();}),["total"]).join(",")];
     data.forEach(function(r){lines.push([q(r.code),q(r.buyer),q(r.owner)].concat(cols.map(function(c){return Math.round(c.get(r)*100)/100;}),[Math.round(r.total*100)/100]).join(","));});
-    var csv=lines.join("\n"),done=function(){toast("Copied "+data.length+" rows to clipboard");};
+    copyText(lines.join("\n"),data.length);
+  });
+  function copyText(csv,n){
+    var done=function(){toast("Copied "+n+" rows to clipboard");};
     function fallback(text){var ta=document.createElement("textarea");ta.value=text;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();try{document.execCommand("copy");done();}catch(_){toast("Copy was blocked by the browser");}ta.remove();}
     try{navigator.clipboard.writeText(csv).then(done,function(){fallback(csv);});}catch(e){fallback(csv);}
-  });
+  }
 
   // ---------- data loading + auto-refresh ----------
   function showError(msg){
@@ -295,11 +501,8 @@
     }
     var snap=JSON.parse(json),changed=!S||S.asOf!==snap.asOf||(S.source||{}).runId!==(snap.source||{}).runId;
     if(!changed){renderFreshness();return;}
-    var wasDrawer=$("drawer").open?dr.code:null;
     prepare(snap);buildComposition();fillOwners();renderMeta();
-    if(S&&!firstPaint)firstPaint=false;
     render();
-    if(wasDrawer)renderDrawer();
   }
   function load(){
     if(!(window.google&&google.script&&google.script.run)){showError("This page must be opened from the Apps Script web app.");return;}
@@ -308,6 +511,7 @@
 
   renderSkeleton();
   setMode(state.mode);
+  route();
   load();
   setInterval(function(){if(!document.hidden)load();},REFRESH_MS);
   setInterval(renderFreshness,60000);
